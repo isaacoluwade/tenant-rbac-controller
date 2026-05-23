@@ -1,0 +1,16 @@
+apiVersion: v2
+name: tenant-rbac-controller
+description: Operator that reconciles Tenant CRDs into full tenant environments.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/example/tenant-rbac-controller
+sources:
+  - https://github.com/example/tenant-rbac-controller
+keywords:
+  - platform
+  - tenancy
+  - mtkp
+maintainers:
+  - name: platform-team
+    email: platform@example.com

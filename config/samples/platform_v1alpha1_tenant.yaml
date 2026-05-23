@@ -1,0 +1,27 @@
+apiVersion: platform.mtkp.platform/v1alpha1
+kind: Tenant
+metadata:
+  name: payments
+spec:
+  displayName: Payments
+  namespace: payments
+  owners:
+    - kind: Group
+      name: payments-team
+      apiGroup: rbac.authorization.k8s.io
+  quotas:
+    cpuRequests: "20"
+    cpuLimits: "40"
+    memoryRequests: 20Gi
+    memoryLimits: 40Gi
+    pods: "200"
+  secrets:
+    - name: payment-provider-api-key
+      remoteRef: mtkp/payments/payment-provider-api-key
+  ingress:
+    host: payments.example.com
+    serviceName: payments-api
+    servicePort: 8080
+  irsaRoleArn: arn:aws:iam::123456789012:role/mtkp-tenant-payments
+  deployRepo: https://github.com/example/payments-deploy
+  deployRef: main

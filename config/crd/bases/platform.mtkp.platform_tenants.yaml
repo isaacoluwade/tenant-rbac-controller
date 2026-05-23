@@ -1,0 +1,113 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.15.0
+  name: tenants.platform.mtkp.platform
+spec:
+  group: platform.mtkp.platform
+  names:
+    kind: Tenant
+    listKind: TenantList
+    plural: tenants
+    shortNames:
+      - tn
+    singular: tenant
+  scope: Cluster
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Display
+          type: string
+          jsonPath: .spec.displayName
+        - name: Namespace
+          type: string
+          jsonPath: .status.namespace
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            apiVersion: { type: string }
+            kind:       { type: string }
+            metadata:   { type: object }
+            spec:
+              type: object
+              required: [displayName, owners, deployRepo]
+              properties:
+                displayName: { type: string }
+                namespace:   { type: string }
+                owners:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [kind, name]
+                    properties:
+                      kind:      { type: string }
+                      name:      { type: string }
+                      namespace: { type: string }
+                      apiGroup:  { type: string }
+                quotas:
+                  type: object
+                  properties:
+                    cpuRequests:          { type: string, default: "10" }
+                    cpuLimits:            { type: string, default: "20" }
+                    memoryRequests:       { type: string, default: "10Gi" }
+                    memoryLimits:         { type: string, default: "20Gi" }
+                    pods:                 { type: string, default: "100" }
+                    defaultLimitCpu:      { type: string, default: "500m" }
+                    defaultLimitMemory:   { type: string, default: "512Mi" }
+                    defaultRequestCpu:    { type: string, default: "100m" }
+                    defaultRequestMemory: { type: string, default: "128Mi" }
+                secrets:
+                  type: array
+                  items:
+                    type: object
+                    required: [name, remoteRef]
+                    properties:
+                      name:           { type: string }
+                      remoteRef:      { type: string }
+                      secretStoreRef: { type: string, default: "platform-secret-store" }
+                ingress:
+                  type: object
+                  required: [host]
+                  properties:
+                    host:         { type: string }
+                    serviceName:  { type: string }
+                    servicePort:  { type: integer, format: int32, default: 80 }
+                    ingressClass: { type: string, default: "alb" }
+                    annotations:
+                      type: object
+                      additionalProperties: { type: string }
+                irsaRoleArn: { type: string }
+                deployRepo:  { type: string }
+                deployRef:   { type: string, default: "HEAD" }
+            status:
+              type: object
+              properties:
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required: [lastTransitionTime, message, reason, status, type]
+                    properties:
+                      lastTransitionTime: { type: string, format: date-time }
+                      message:            { type: string }
+                      observedGeneration: { type: integer, format: int64 }
+                      reason:             { type: string }
+                      status:             { type: string, enum: ["True", "False", "Unknown"] }
+                      type:               { type: string }
+                namespace:          { type: string }
+                phase:              { type: string }
+                observedGeneration: { type: integer, format: int64 }

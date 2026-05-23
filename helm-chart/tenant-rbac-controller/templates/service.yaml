@@ -1,0 +1,39 @@
+{{- if .Values.metrics.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.serviceAccount.name }}-metrics
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: tenant-rbac-controller
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: metrics
+      port: {{ .Values.metrics.port }}
+      targetPort: metrics
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: tenant-rbac-controller
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+{{- if and .Values.metrics.enabled .Values.metrics.serviceMonitor.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .Values.serviceAccount.name }}
+  namespace: {{ .Values.metrics.serviceMonitor.namespace }}
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tenant-rbac-controller
+  namespaceSelector:
+    matchNames: [{{ .Release.Namespace }}]
+  endpoints:
+    - port: metrics
+      interval: 30s
+{{- end }}

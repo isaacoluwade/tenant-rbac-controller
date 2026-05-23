@@ -1,0 +1,51 @@
+image:
+  repository: ghcr.io/example/tenant-rbac-controller
+  tag: ""           # defaults to .Chart.AppVersion
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+
+serviceAccount:
+  create: true
+  name: tenant-rbac-controller
+  annotations: {}   # set eks.amazonaws.com/role-arn here if the operator needs AWS access
+
+leaderElection:
+  enabled: true
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    memory: 512Mi
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  capabilities:
+    drop: [ALL]
+
+metrics:
+  enabled: true
+  port: 8443
+  serviceMonitor:
+    enabled: true
+    namespace: monitoring
+
+webhook:
+  enabled: false
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# CRDs are installed via the `install` subcommand of kubectl in CI; the chart
+# does not embed them so upgrades can replace CRDs without Helm conflict.
+installCRDs: true

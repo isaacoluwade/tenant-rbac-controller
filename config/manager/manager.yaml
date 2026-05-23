@@ -1,0 +1,63 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tenant-rbac-controller
+  labels:
+    control-plane: tenant-rbac-controller
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tenant-rbac-controller
+  namespace: tenant-rbac-controller
+  labels:
+    control-plane: tenant-rbac-controller
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      control-plane: tenant-rbac-controller
+  template:
+    metadata:
+      labels:
+        control-plane: tenant-rbac-controller
+    spec:
+      serviceAccountName: tenant-rbac-controller
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: manager
+          image: tenant-rbac-controller:latest
+          args:
+            - --leader-elect=true
+            - --metrics-bind-address=:8080
+            - --health-probe-bind-address=:8081
+          ports:
+            - name: metrics
+              containerPort: 8080
+            - name: probes
+              containerPort: 8081
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          livenessProbe:
+            httpGet: { path: /healthz, port: probes }
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet: { path: /readyz, port: probes }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

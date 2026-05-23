@@ -1,0 +1,16 @@
+domain: mtkp.platform
+layout:
+- go.kubebuilder.io/v4
+projectName: tenant-rbac-controller
+repo: github.com/example/tenant-rbac-controller
+resources:
+- api:
+    crdVersion: v1
+    namespaced: false
+  controller: true
+  domain: mtkp.platform
+  group: platform
+  kind: Tenant
+  path: github.com/example/tenant-rbac-controller/api/v1alpha1
+  version: v1alpha1
+version: "3"

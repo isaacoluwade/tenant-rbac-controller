@@ -1,0 +1,32 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Values.serviceAccount.name }}-manager-role
+rules:
+  - apiGroups: ["platform.mtkp.platform"]
+    resources: [tenants]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: ["platform.mtkp.platform"]
+    resources: [tenants/status, tenants/finalizers]
+    verbs: [get, update, patch]
+  - apiGroups: [""]
+    resources: [namespaces, serviceaccounts, configmaps, services, events]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [resourcequotas, limitranges]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [roles, rolebindings]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies, ingresses]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [external-secrets.io]
+    resources: [externalsecrets]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [argoproj.io]
+    resources: [appprojects, applications]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, list, watch, create, update, patch, delete]
