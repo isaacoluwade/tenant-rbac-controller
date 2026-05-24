@@ -40,7 +40,30 @@ metrics:
     namespace: monitoring
 
 webhook:
-  enabled: false
+  # Toggle the admission webhook on or off. Default is on — the webhook is a
+  # security control, not an optional feature. Disable only when running the
+  # controller locally with `make run` without cert-manager.
+  enabled: true
+  # Port the controller-runtime webhook server listens on inside the pod.
+  # The Service maps :443 -> targetPort: 9443. Don't change unless you also
+  # update the container probes and the Service.
+  port: 9443
+  # Secret containing the TLS material cert-manager issues. Created by the
+  # Certificate resource in templates/certificate.yaml.
+  certSecretName: tenant-rbac-controller-webhook-tls
+  # failurePolicy controls what happens when the webhook is unreachable.
+  # Set to "Fail" — admission MUST block on validation, otherwise an
+  # operator outage becomes a tenant-policy bypass.
+  failurePolicy: Fail
+  # The webhook only mutates / validates the incoming object; it doesn't
+  # talk to any other API. "None" is the correct value and avoids retries.
+  sideEffects: None
+  # Webhook call timeout. 10s is generous — most calls complete in <50ms.
+  timeoutSeconds: 10
+  # Namespace cert-manager is installed into. Used to render the Issuer
+  # reference and inject-ca-from annotation.
+  certManager:
+    enabled: true
 
 nodeSelector: {}
 tolerations: []

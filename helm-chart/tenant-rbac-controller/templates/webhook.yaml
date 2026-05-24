@@ -1,0 +1,64 @@
+{{- if .Values.webhook.enabled }}
+{{- $fullName := include "tenant-rbac-controller.fullname" . | default "tenant-rbac-controller" -}}
+{{- $svcName := printf "%s-webhook" $fullName -}}
+{{- $certName := printf "%s-serving-cert" $fullName -}}
+# Mutating webhook — applies defaults for spec.namespace, spec.deployRef,
+# and spec.quotas.pods. Runs before the validator in the admission chain.
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{ $fullName }}-mutating-webhook
+  annotations:
+    # cert-manager populates .clientConfig.caBundle from the Secret backing
+    # the named Certificate. Without this annotation the webhook traffic
+    # fails TLS verification at the API server and admission breaks.
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ $certName }}
+  labels:
+    app.kubernetes.io/name: tenant-rbac-controller
+    app.kubernetes.io/instance: {{ .Release.Name }}
+webhooks:
+  - name: mtenant.kb.io
+    admissionReviewVersions: ["v1"]
+    sideEffects: {{ .Values.webhook.sideEffects }}
+    failurePolicy: {{ .Values.webhook.failurePolicy }}
+    timeoutSeconds: {{ .Values.webhook.timeoutSeconds }}
+    clientConfig:
+      service:
+        name: {{ $svcName }}
+        namespace: {{ .Release.Namespace }}
+        path: /mutate-platform-mtkp-platform-v1alpha1-tenant
+    rules:
+      - apiGroups: ["platform.mtkp.platform"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["tenants"]
+---
+# Validating webhook — enforces the platform's tenant policy
+# (namespace allow-list, quota caps, secret-path policy, ingress apex,
+#  IRSA ARN shape, github-only deployRepo).
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: {{ $fullName }}-validating-webhook
+  annotations:
+    cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ $certName }}
+  labels:
+    app.kubernetes.io/name: tenant-rbac-controller
+    app.kubernetes.io/instance: {{ .Release.Name }}
+webhooks:
+  - name: vtenant.kb.io
+    admissionReviewVersions: ["v1"]
+    sideEffects: {{ .Values.webhook.sideEffects }}
+    failurePolicy: {{ .Values.webhook.failurePolicy }}
+    timeoutSeconds: {{ .Values.webhook.timeoutSeconds }}
+    clientConfig:
+      service:
+        name: {{ $svcName }}
+        namespace: {{ .Release.Namespace }}
+        path: /validate-platform-mtkp-platform-v1alpha1-tenant
+    rules:
+      - apiGroups: ["platform.mtkp.platform"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["tenants"]
+{{- end }}

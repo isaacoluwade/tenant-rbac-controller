@@ -1,0 +1,31 @@
+# cert-manager Issuer + Certificate for the webhook serving cert.
+#
+# We use a self-signed Issuer instead of the cluster CA because the webhook
+# only needs to be trusted by the kube-apiserver, and the
+# `cert-manager.io/inject-ca-from` annotation on the webhook configurations
+# wires up trust automatically. Rotation is handled by cert-manager —
+# controller-runtime watches the cert file and reloads on change.
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: tenant-rbac-controller-selfsigned
+  namespace: tenant-rbac-system
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: tenant-rbac-controller-serving-cert
+  namespace: tenant-rbac-system
+spec:
+  secretName: tenant-rbac-controller-webhook-tls
+  dnsNames:
+    - tenant-rbac-controller-webhook.tenant-rbac-system.svc
+    - tenant-rbac-controller-webhook.tenant-rbac-system.svc.cluster.local
+  duration: 8760h    # 1 year
+  renewBefore: 720h  # 30 days
+  issuerRef:
+    name: tenant-rbac-controller-selfsigned
+    kind: Issuer

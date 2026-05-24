@@ -45,6 +45,22 @@ lint: golangci-lint
 test: envtest
 	KUBEBUILDER_ASSETS="$$($(ENVTEST) use -p path)" go test ./... -coverprofile cover.out
 
+.PHONY: webhook-test
+# Webhook-specific test suite. Runs the defaulter + validator unit tests
+# (and any envtest-backed cases) under api/v1alpha1. Faster than the full
+# `make test` when iterating on webhook rules.
+webhook-test: envtest
+	KUBEBUILDER_ASSETS="$$($(ENVTEST) use -p path)" go test ./api/v1alpha1/... -run "Webhook|Validator|Defaulter" -v
+
+.PHONY: test-integration
+# Real-cluster integration test. Boots a Kind cluster, installs upstream CRDs,
+# runs the controller in-process, applies a sample Tenant, asserts the
+# downstream resources materialize, mutates + deletes the Tenant. See
+# test/integration/README.md for the full description and host prereqs.
+# Build-tagged so `make test` keeps skipping it.
+test-integration:
+	go test -tags=integration -timeout 20m -v ./test/integration/...
+
 ##@ Build
 
 .PHONY: build

@@ -37,3 +37,26 @@ spec:
     - port: metrics
       interval: 30s
 {{- end }}
+{{- if .Values.webhook.enabled }}
+---
+# Webhook Service. Exposes :443 (the API server's expected webhook port)
+# and routes to the manager's webhook server on the configured port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "tenant-rbac-controller.fullname" . | default "tenant-rbac-controller" }}-webhook
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: tenant-rbac-controller
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: webhook
+      port: 443
+      targetPort: {{ .Values.webhook.port }}
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: tenant-rbac-controller
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}

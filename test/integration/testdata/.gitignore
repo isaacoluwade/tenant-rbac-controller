@@ -1,0 +1,5 @@
+# Cached upstream CRDs (downloaded on first run from pinned URLs in suite_test.go).
+# Safe to delete locally; will be re-fetched on the next test run.
+external-secrets-crd.yaml
+argocd-appproject-crd.yaml
+argocd-application-crd.yaml

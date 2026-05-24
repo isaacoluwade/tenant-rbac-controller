@@ -1,0 +1,17 @@
+# Service the API server uses to reach the webhook. The controller-runtime
+# webhook server listens on 9443 inside the pod; the Service exposes it on
+# 443 (the canonical webhook port) so the WebhookConfiguration doesn't need
+# a non-default port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: tenant-rbac-controller-webhook
+  namespace: tenant-rbac-system
+spec:
+  ports:
+    - name: webhook
+      port: 443
+      targetPort: 9443
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: tenant-rbac-controller

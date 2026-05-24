@@ -13,6 +13,7 @@ package main
 import (
 	"flag"
 	"os"
+	"strconv"
 
 	// +kubebuilder:scaffold:imports
 
@@ -66,13 +67,25 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
+	// Webhook port. Defaults to the controller-runtime convention (9443)
+	// and is overridable via WEBHOOK_PORT so the Helm chart can keep the
+	// value in one place (values.yaml -> env -> here).
+	webhookPort := 9443
+	if v := os.Getenv("WEBHOOK_PORT"); v != "" {
+		if p, perr := strconv.Atoi(v); perr == nil && p > 0 {
+			webhookPort = p
+		} else {
+			setupLog.Info("ignoring invalid WEBHOOK_PORT", "value", v)
+		}
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsserver.Options{BindAddress: metricsAddr},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "tenant-rbac-controller.mtkp.platform",
-		WebhookServer:          webhook.NewServer(webhook.Options{Port: 9443}),
+		WebhookServer:          webhook.NewServer(webhook.Options{Port: webhookPort}),
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -86,6 +99,14 @@ func main() {
 		ArgoCDNamespace:   argocdNamespace,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create tenant controller")
+		os.Exit(1)
+	}
+
+	// Register the admission webhook (defaulter + validator). The
+	// webhook runs in the same process as the reconciler — controller-runtime
+	// multiplexes the HTTPS server we configured above on port 9443.
+	if err = platformv1alpha1.SetupTenantWebhookWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to register tenant webhook")
 		os.Exit(1)
 	}
 

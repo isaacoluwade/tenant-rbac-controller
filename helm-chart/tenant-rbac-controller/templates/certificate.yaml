@@ -1,0 +1,41 @@
+{{- if and .Values.webhook.enabled .Values.webhook.certManager.enabled }}
+{{- $fullName := include "tenant-rbac-controller.fullname" . | default "tenant-rbac-controller" -}}
+{{- $svcName := printf "%s-webhook" $fullName -}}
+{{- $certName := printf "%s-serving-cert" $fullName -}}
+# Self-signed Issuer scoped to this namespace. The webhook only needs the
+# kube-apiserver to trust it, and cert-manager's `inject-ca-from`
+# annotation distributes the CA into the WebhookConfigurations — so a
+# self-signed chain is the simplest secure option here.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ $fullName }}-selfsigned
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: tenant-rbac-controller
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  selfSigned: {}
+---
+# Webhook serving cert. The Secret named here is mounted into the
+# controller pod at /tmp/k8s-webhook-server/serving-certs, which is the
+# controller-runtime default — no flag overrides required.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $certName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: tenant-rbac-controller
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  secretName: {{ .Values.webhook.certSecretName }}
+  dnsNames:
+    - {{ $svcName }}.{{ .Release.Namespace }}.svc
+    - {{ $svcName }}.{{ .Release.Namespace }}.svc.cluster.local
+  duration: 8760h    # 1y
+  renewBefore: 720h  # 30d before expiry
+  issuerRef:
+    name: {{ $fullName }}-selfsigned
+    kind: Issuer
+{{- end }}

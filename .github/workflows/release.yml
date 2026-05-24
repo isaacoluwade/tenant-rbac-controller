@@ -6,57 +6,124 @@ on:
       - "v*.*.*"
 
 permissions:
-  contents: write
-  id-token: write
-  packages: write
+  contents: write   # publish release + attach artifacts
+  id-token: write   # OIDC token for cosign keyless signing
+  packages: write   # push container images to ghcr.io
 
 jobs:
-  release:
+  verify:
+    name: Verify version + changelog
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - name: Verify tag matches VERSION / CHANGELOG entry
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          echo "Releasing ${TAG} (version=${VERSION})"
+
+          if [ -f VERSION ]; then
+            FILE_VERSION="$(cat VERSION | tr -d '[:space:]')"
+            if [ "${FILE_VERSION}" != "${VERSION}" ] && [ "v${FILE_VERSION}" != "${TAG}" ]; then
+              echo "VERSION file (${FILE_VERSION}) does not match tag (${TAG})" >&2
+              exit 1
+            fi
+          fi
+
+          if [ -f CHANGELOG.md ]; then
+            if ! grep -qE "^##\s+\[?v?${VERSION}\]?" CHANGELOG.md; then
+              echo "CHANGELOG.md has no entry for v${VERSION}" >&2
+              exit 1
+            fi
+            # Extract the section for this version into release-notes.md.
+            awk -v v="${VERSION}" '
+              $0 ~ "^##[[:space:]]+\\[?v?" v "\\]?" { flag=1; next }
+              flag && /^##[[:space:]]/ { exit }
+              flag { print }
+            ' CHANGELOG.md > release-notes.md
+            echo "--- release-notes.md ---"
+            cat release-notes.md
+          else
+            echo "no CHANGELOG.md present; skipping release notes extraction"
+            : > release-notes.md
+          fi
+
+      - name: Upload release-notes.md
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes.md
+          if-no-files-found: ignore
+
+  release:
+    name: GoReleaser
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # goreleaser needs full history for changelog generation
+
       - uses: actions/setup-go@v5
         with:
           go-version: "1.22"
+          cache-dependency-path: go.sum
 
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Install syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
         with:
-          role-to-assume: ${{ secrets.RELEASE_OIDC_ROLE_ARN }}
-          aws-region: us-east-1
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Login to ECR
-        id: ecr
-        run: |
-          aws ecr get-login-password --region us-east-1 \
-            | docker login --username AWS --password-stdin "${{ secrets.ECR_REGISTRY }}"
-
-      - name: Build & push multi-arch image
-        uses: docker/build-push-action@v6
+      - name: Download release-notes.md
+        uses: actions/download-artifact@v4
         with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ secrets.ECR_REGISTRY }}/platform/tenant-rbac-controller:${{ github.ref_name }}
-            ${{ secrets.ECR_REGISTRY }}/platform/tenant-rbac-controller:latest
+          name: release-notes
+          path: .
+        continue-on-error: true
 
-      - name: GoReleaser (binary attestation)
+      - name: GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
-          version: latest
+          version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COSIGN_YES: "true"
+
+  helm:
+    name: Package & push Helm chart
+    runs-on: ubuntu-latest
+    needs: release
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Helm
+        run: curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Login to GHCR (Helm OCI)
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | \
+            helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: Package & push Helm chart
         run: |
-          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-          helm package helm-chart/tenant-rbac-controller --version "${GITHUB_REF_NAME#v}"
-          helm push tenant-rbac-controller-*.tgz "oci://${{ secrets.ECR_REGISTRY }}/platform"
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          helm package helm-chart/tenant-rbac-controller --version "${VERSION}" --app-version "${VERSION}"
+          helm push tenant-rbac-controller-${VERSION}.tgz "oci://ghcr.io/${{ github.repository_owner }}/charts"

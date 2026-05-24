@@ -7,3 +7,8 @@ resources:
   - ../rbac/role.yaml
   - ../rbac/role_binding.yaml
   - ../manager/manager.yaml
+  # Webhook + cert-manager overlays. Comment these two lines out for the
+  # `make run` developer flow if cert-manager isn't installed locally;
+  # the webhook is required in cluster deployments.
+  - ../webhook
+  - ../certmanager

@@ -32,6 +32,13 @@ spec:
             {{- if .Values.leaderElection.enabled }}
             - --leader-elect
             {{- end }}
+          env:
+            {{- if .Values.webhook.enabled }}
+            # Port advertised by controller-runtime's webhook server. The
+            # manager wires this into webhook.NewServer at startup.
+            - name: WEBHOOK_PORT
+              value: {{ .Values.webhook.port | quote }}
+            {{- end }}
           ports:
             - name: metrics
               containerPort: {{ .Values.metrics.port }}
@@ -39,6 +46,11 @@ spec:
             - name: health
               containerPort: 8081
               protocol: TCP
+            {{- if .Values.webhook.enabled }}
+            - name: webhook
+              containerPort: {{ .Values.webhook.port }}
+              protocol: TCP
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz
@@ -53,6 +65,23 @@ spec:
             periodSeconds: 10
           resources: {{ toYaml .Values.resources | nindent 12 }}
           securityContext: {{ toYaml .Values.containerSecurityContext | nindent 12 }}
+          {{- if .Values.webhook.enabled }}
+          # cert-manager writes the serving cert + key into this Secret;
+          # controller-runtime reads them from the well-known path below.
+          # Mount is read-only — combined with readOnlyRootFilesystem this
+          # gives us a fully immutable filesystem at runtime.
+          volumeMounts:
+            - name: webhook-cert
+              mountPath: /tmp/k8s-webhook-server/serving-certs
+              readOnly: true
+          {{- end }}
+      {{- if .Values.webhook.enabled }}
+      volumes:
+        - name: webhook-cert
+          secret:
+            secretName: {{ .Values.webhook.certSecretName }}
+            defaultMode: 0440
+      {{- end }}
       nodeSelector: {{ toYaml .Values.nodeSelector | nindent 8 }}
       tolerations: {{ toYaml .Values.tolerations | nindent 8 }}
       affinity: {{ toYaml .Values.affinity | nindent 8 }}

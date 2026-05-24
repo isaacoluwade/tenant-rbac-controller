@@ -116,8 +116,12 @@ func TestReconcile_HappyPath(t *testing.T) {
 	// ResourceQuota.
 	var rq corev1.ResourceQuota
 	require.NoError(t, cl.Get(ctx, types.NamespacedName{Name: "tenant-quota", Namespace: "payments"}, &rq))
-	assert.Equal(t, "10", rq.Spec.Hard["requests.cpu"].String())
-	assert.Equal(t, "50", rq.Spec.Hard["pods"].String())
+	// resource.Quantity.String() has a pointer receiver, and map indexing
+	// returns a non-addressable copy — capture the values first.
+	cpuReq := rq.Spec.Hard["requests.cpu"]
+	pods := rq.Spec.Hard["pods"]
+	assert.Equal(t, "10", cpuReq.String())
+	assert.Equal(t, "50", pods.String())
 
 	// LimitRange.
 	var lr corev1.LimitRange

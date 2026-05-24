@@ -1,0 +1,52 @@
+# Generated webhook configuration for the Tenant CRD.
+# Kept in source rather than purely generated so reviewers can diff policy
+# changes (failurePolicy, sideEffects, timeoutSeconds) without running
+# controller-gen.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: tenant-rbac-controller-mutating-webhook
+  annotations:
+    # cert-manager injects the CA bundle from the Certificate resource
+    # referenced below into every webhook clientConfig in this object.
+    cert-manager.io/inject-ca-from: tenant-rbac-system/tenant-rbac-controller-serving-cert
+webhooks:
+  - name: mtenant.kb.io
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    failurePolicy: Fail
+    timeoutSeconds: 10
+    clientConfig:
+      service:
+        name: tenant-rbac-controller-webhook
+        namespace: tenant-rbac-system
+        path: /mutate-platform-mtkp-platform-v1alpha1-tenant
+    rules:
+      - apiGroups: ["platform.mtkp.platform"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["tenants"]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: tenant-rbac-controller-validating-webhook
+  annotations:
+    cert-manager.io/inject-ca-from: tenant-rbac-system/tenant-rbac-controller-serving-cert
+webhooks:
+  - name: vtenant.kb.io
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    failurePolicy: Fail
+    timeoutSeconds: 10
+    clientConfig:
+      service:
+        name: tenant-rbac-controller-webhook
+        namespace: tenant-rbac-system
+        path: /validate-platform-mtkp-platform-v1alpha1-tenant
+    rules:
+      - apiGroups: ["platform.mtkp.platform"]
+        apiVersions: ["v1alpha1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["tenants"]

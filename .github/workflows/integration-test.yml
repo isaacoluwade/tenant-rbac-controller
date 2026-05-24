@@ -1,0 +1,54 @@
+name: integration-test
+
+# Real-cluster Kind-based integration test for the tenant reconciler.
+# Complements the in-process envtest suite (envtest.yml) by exercising the
+# real API server, admission chain, and CRD installation surface.
+#
+# Runs on every PR to main. Takes ~6-8 minutes including Kind boot.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      # helm/kind-action provisions Kind + kubectl on the runner. We let the
+      # test code itself create the cluster (so the same flow works locally),
+      # but the action still installs the kind + kubectl binaries we need.
+      - uses: helm/kind-action@v1
+        with:
+          version: v0.23.0
+          node_image: kindest/node:v1.29.4
+          # Skip creating a cluster — the test bootstrap creates its own
+          # named "tenant-rbac-it" so it can fully control the lifecycle.
+          install_only: true
+
+      - name: Run integration suite
+        run: make test-integration
+
+      - name: Collect Kind logs on failure
+        if: failure()
+        run: |
+          kind export logs ./kind-logs --name tenant-rbac-it || true
+
+      - name: Upload Kind logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kind-logs
+          path: kind-logs
+          if-no-files-found: ignore

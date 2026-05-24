@@ -1,0 +1,168 @@
+# .goreleaser.yml
+# GoReleaser v2 config for tenant-rbac-controller.
+#
+# Produces:
+#   - Cross-compiled `manager` binaries (linux/darwin x amd64/arm64).
+#   - tar.gz archives with README + CHANGELOG.
+#   - Multi-arch docker images pushed to ghcr.io.
+#   - Multi-arch docker manifest joining the per-arch images.
+#   - SPDX-JSON SBOMs (one per archive, one per image) via syft.
+#   - Cosign keyless signatures (Fulcio + Rekor, GitHub OIDC) on every image.
+#   - SHA256 checksums over every artifact.
+#   - A GitHub release with all artifacts attached.
+#
+# Validate locally with:  goreleaser check
+# Build a snapshot with:  goreleaser release --snapshot --clean
+
+version: 2
+
+project_name: tenant-rbac-controller
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod download
+
+builds:
+  - id: manager
+    main: ./cmd
+    binary: manager
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: manager
+    builds: [manager]
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+    format: tar.gz
+    files:
+      - README.md
+      - CHANGELOG.md
+      - LICENSE*
+
+dockers:
+  - id: manager-amd64
+    use: buildx
+    goos: linux
+    goarch: amd64
+    image_templates:
+      - "ghcr.io/example/tenant-rbac-controller:{{ .Version }}-amd64"
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.source=https://github.com/example/tenant-rbac-controller"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.licenses=Apache-2.0"
+  - id: manager-arm64
+    use: buildx
+    goos: linux
+    goarch: arm64
+    image_templates:
+      - "ghcr.io/example/tenant-rbac-controller:{{ .Version }}-arm64"
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.source=https://github.com/example/tenant-rbac-controller"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.licenses=Apache-2.0"
+
+docker_manifests:
+  - name_template: "ghcr.io/example/tenant-rbac-controller:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/example/tenant-rbac-controller:{{ .Version }}-amd64"
+      - "ghcr.io/example/tenant-rbac-controller:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/example/tenant-rbac-controller:latest"
+    image_templates:
+      - "ghcr.io/example/tenant-rbac-controller:{{ .Version }}-amd64"
+      - "ghcr.io/example/tenant-rbac-controller:{{ .Version }}-arm64"
+
+sboms:
+  - id: archive
+    artifacts: archive
+    documents:
+      - "{{ .ArtifactName }}.spdx.json"
+    cmd: syft
+    args: ["$artifact", "--output", "spdx-json=$document"]
+  - id: image
+    artifacts: package
+    documents:
+      - "{{ .ArtifactName }}.spdx.json"
+    cmd: syft
+    args: ["$artifact", "--output", "spdx-json=$document"]
+
+# Keyless cosign signing using the ambient GitHub OIDC token.
+# Requires `id-token: write` permission in the workflow.
+signs:
+  - id: images
+    cmd: cosign
+    artifacts: manifests
+    signature: "${artifact}.sig"
+    certificate: "${artifact}.pem"
+    output: true
+    args:
+      - "sign"
+      - "--yes"
+      - "--oidc-issuer=https://token.actions.githubusercontent.com"
+      - "${artifact}@${digest}"
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-SNAPSHOT-{{ .ShortCommit }}"
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^chore:"
+      - "^test:"
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: example
+    name: tenant-rbac-controller
+  draft: false
+  prerelease: auto
+  mode: append
+  header: |
+    ## tenant-rbac-controller {{ .Tag }}
+  footer: |
+    ---
+    Container images are signed with cosign (keyless, Fulcio + Rekor).
+    Verify with:
+    ```
+    cosign verify ghcr.io/example/tenant-rbac-controller:{{ .Tag }} \
+      --certificate-identity-regexp '^https://github\.com/example/tenant-rbac-controller/\.github/workflows/release\.yml@refs/tags/v.*$' \
+      --certificate-oidc-issuer https://token.actions.githubusercontent.com
+    ```
+  extra_files:
+    - glob: ./release-notes.md
