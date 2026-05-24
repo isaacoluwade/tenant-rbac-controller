@@ -43,7 +43,7 @@ spec:
   ingress:
     host: payments.mtkp.example.com
     className: alb
-  irsaRoleArn: arn:aws:iam::123456789012:role/mtkp-prod-useast1-payments
+  irsaRoleArn: arn:aws:iam::123456789012:role/mtkp-prod-use1-payments
   deployRepo: https://github.com/my-org/tenant-deploy-payments.git
   deployRef: main
 ```
